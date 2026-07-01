@@ -79,6 +79,7 @@ export interface GameStore {
   acceptTrade: (tradeId: string) => void;
   rejectTrade: (tradeId: string) => void;
   declareBankruptcy: (creditorId: string | null) => void;
+  rollAgain: () => void;
   endTurn: () => void;
 
   applyStateUpdate: (state: GameState) => void;

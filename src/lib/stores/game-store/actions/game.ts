@@ -236,6 +236,26 @@ export function createGameActions(set: StoreSet, get: StoreGet) {
       } else sendToHost?.(action);
     },
 
+    rollAgain: () => {
+      const { localPlayerId, isHost, broadcastAction, sendToHost, gameState } = get();
+      if (!localPlayerId || !gameState) return;
+
+      const currentPlayer = getCurrentPlayer(gameState);
+      if (!currentPlayer || currentPlayer.id !== localPlayerId) return;
+
+      // Reset roll state for the extra (doubles) turn, then immediately start
+      // a fresh physics roll for this same player.
+      const action: GameAction = { type: 'ROLL_AGAIN', playerId: localPlayerId };
+      get().applyActionFromNetwork(action);
+      if (isHost) broadcastAction?.(action);
+      else sendToHost?.(action);
+
+      set(state => {
+        state.diceResult = null;
+        state.isRolling = true;
+      });
+    },
+
     endTurn: () => {
       const { localPlayerId, isHost, broadcastAction, sendToHost, gameState } = get();
       if (!localPlayerId || !gameState) return;

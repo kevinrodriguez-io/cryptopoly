@@ -4,7 +4,8 @@
 
 import type { GameState, Tile, Card } from '../types';
 import { TILES, getNextRailroadIndex, getNextUtilityIndex } from '../board-data';
-import { GO_SALARY, JAIL_INDEX, BOARD_SIZE } from './constants';
+import { JAIL_INDEX, BOARD_SIZE } from './constants';
+import { applyGoSalary } from './movement';
 import { calculateRent } from './rent';
 
 export function handleLandOnTile(state: GameState, playerId: string, tile: Tile): void {
@@ -143,13 +144,16 @@ export function executeCardAction(state: GameState, playerId: string, card: Card
     case 'move-to': {
       const oldPosition = player.position;
       const newPosition = action.tileIndex;
-      const passedGo = action.collectGo !== false && newPosition < oldPosition && newPosition !== 0;
+      // Landing directly on GO always pays the salary (e.g. "Advance to GO").
+      // Otherwise, passing GO pays only when the card allows it.
+      const landsOnGo = newPosition === 0;
+      const passedGo = action.collectGo !== false && newPosition < oldPosition && !landsOnGo;
 
       state.players[playerId] = {
         ...player,
         position: newPosition,
-        money: passedGo ? player.money + GO_SALARY : player.money,
       };
+      if (passedGo || landsOnGo) applyGoSalary(state, playerId);
 
       const landedTile = TILES[newPosition];
       handleLandOnTile(state, playerId, landedTile);
@@ -220,8 +224,8 @@ export function executeCardAction(state: GameState, playerId: string, card: Card
       state.players[playerId] = {
         ...player,
         position: targetIndex,
-        money: passedGo ? player.money + GO_SALARY : player.money,
       };
+      if (passedGo) applyGoSalary(state, playerId);
 
       const landedTile = TILES[targetIndex];
       const propertyState = state.properties[targetIndex];

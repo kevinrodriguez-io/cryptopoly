@@ -8,6 +8,7 @@ import { GAME_NAME } from '@/lib/game/constants';
 import { PlayerPanel } from '@/components/game/PlayerPanel';
 import { ActionPanel } from '@/components/game/ActionPanel';
 import { PropertyCard } from '@/components/game/PropertyCard';
+import { GoCollectToast } from '@/components/game/GoCollectToast';
 
 // Dynamically import the 3D scene to avoid SSR issues
 const GameScene = dynamic(
@@ -181,6 +182,9 @@ export default function GamePage() {
 
       {/* Property Card Modal */}
       <PropertyCard />
+
+      {/* GO salary collected popup */}
+      <GoCollectToast />
 
       {/* Winner Overlay */}
       <WinnerOverlay />

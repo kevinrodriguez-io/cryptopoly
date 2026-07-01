@@ -2,7 +2,7 @@
 // CRYPTOPOLY - Apply game action (main reducer)
 // ============================================
 
-import type { GameState, GameAction, PropertyTile, TokenType } from '../types';
+import type { GameState, GameAction, PropertyTile, TokenType, PendingAction } from '../types';
 import { TILES, shuffleArray } from '../board-data';
 import {
   JAIL_FINE,
@@ -17,6 +17,33 @@ import { getCurrentPlayer, getNextPlayerIndex } from './players';
 import { executeCardAction } from './tiles';
 import { canAfford, canBuildHouse, canSellHouse, checkWinner } from './validation';
 import { handleRollDice } from './apply-action-roll';
+import { isDoubles } from './dice';
+
+type AuctionAction = Extract<PendingAction, { type: 'auction' }>;
+
+// Hands the auctioned property to the current high bidder and closes the auction.
+function awardAuctionToBidder(newState: GameState, auction: AuctionAction): void {
+  const winnerId = auction.currentBidderId;
+  if (!winnerId) return;
+  const winner = newState.players[winnerId];
+  newState.players = {
+    ...newState.players,
+    [winnerId]: {
+      ...winner,
+      money: winner.money - auction.currentBid,
+      properties: [...winner.properties, auction.tileIndex],
+    },
+  };
+  newState.properties = {
+    ...newState.properties,
+    [auction.tileIndex]: {
+      ...newState.properties[auction.tileIndex],
+      ownerId: winnerId,
+    },
+  };
+  newState.pendingAction = null;
+  newState.turnPhase = 'post-roll';
+}
 
 export function applyAction(state: GameState, action: GameAction): GameState {
   const newState = { ...state, lastUpdateAt: Date.now() };
@@ -118,43 +145,47 @@ export function applyAction(state: GameState, action: GameAction): GameState {
 
     case 'PLACE_BID': {
       if (newState.pendingAction?.type !== 'auction') break;
-      newState.pendingAction = {
-        ...newState.pendingAction,
+      const auction = newState.pendingAction;
+      // Ignore bids from players who already passed / aren't in the auction.
+      if (!auction.participants.includes(action.playerId)) break;
+
+      const updatedAuction: AuctionAction = {
+        ...auction,
         currentBid: action.amount,
         currentBidderId: action.playerId,
       };
+
+      // If this bidder is the only participant left, their bid wins immediately
+      // (there's no one else who could pass to end the auction).
+      if (auction.participants.length === 1) {
+        awardAuctionToBidder(newState, updatedAuction);
+      } else {
+        newState.pendingAction = updatedAuction;
+      }
       break;
     }
 
     case 'PASS_AUCTION': {
       if (newState.pendingAction?.type !== 'auction') break;
       const auction = newState.pendingAction;
+      // Ignore passes from players who aren't part of this auction (e.g. duplicates).
+      if (!auction.participants.includes(action.playerId)) break;
       const remaining = auction.participants.filter(id => id !== action.playerId);
 
-      if (remaining.length === 1 && auction.currentBidderId) {
-        const winnerId = auction.currentBidderId;
-        const winner = newState.players[winnerId];
-        newState.players = {
-          ...newState.players,
-          [winnerId]: {
-            ...winner,
-            money: winner.money - auction.currentBid,
-            properties: [...winner.properties, auction.tileIndex],
-          },
-        };
-        newState.properties = {
-          ...newState.properties,
-          [auction.tileIndex]: {
-            ...newState.properties[auction.tileIndex],
-            ownerId: winnerId,
-          },
-        };
-        newState.pendingAction = null;
-        newState.turnPhase = 'post-roll';
-      } else if (remaining.length === 0 || (remaining.length === 1 && !auction.currentBidderId)) {
+      // Everyone else has dropped out and the high bidder is the last one standing.
+      const onlyBidderLeft =
+        auction.currentBidderId !== null &&
+        remaining.length === 1 &&
+        remaining[0] === auction.currentBidderId;
+
+      if (onlyBidderLeft || (remaining.length === 0 && auction.currentBidderId !== null)) {
+        awardAuctionToBidder(newState, auction);
+      } else if (remaining.length === 0) {
+        // Everyone passed without ever bidding: the property stays unowned.
         newState.pendingAction = null;
         newState.turnPhase = 'post-roll';
       } else {
+        // Auction continues; the remaining players can still bid or pass.
         newState.pendingAction = {
           ...auction,
           participants: remaining,
@@ -451,6 +482,30 @@ export function applyAction(state: GameState, action: GameAction): GameState {
         newState.winnerId = winner;
         newState.phase = 'finished';
       }
+      break;
+    }
+
+    case 'ROLL_AGAIN': {
+      // Extra turn earned by rolling doubles: the SAME player rolls again.
+      // We keep doublesCount (so a 3rd consecutive double still sends to jail)
+      // and the current player; we just reset the roll state so they can roll.
+      // Note: rolling doubles to leave jail does NOT grant an extra roll — that
+      // path never increments doublesCount, so it's excluded here.
+      const currentPlayer = getCurrentPlayer(newState);
+      if (!currentPlayer || currentPlayer.id !== action.playerId) break;
+
+      const roll = newState.currentDiceRoll;
+      const earnedExtraRoll =
+        roll !== null && isDoubles(roll) && newState.doublesCount > 0 && !currentPlayer.inJail;
+      if (!earnedExtraRoll) break;
+
+      newState.currentDiceRoll = null;
+      newState.turnPhase = 'pre-roll';
+      newState.pendingAction = null;
+      newState.players = {
+        ...newState.players,
+        [currentPlayer.id]: { ...currentPlayer, hasRolled: false },
+      };
       break;
     }
 

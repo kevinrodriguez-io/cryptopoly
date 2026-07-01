@@ -25,6 +25,7 @@ export function ActionPanel() {
     payTax,
     drawCard,
     executeCard,
+    rollAgain,
     endTurn,
     payJailFine,
     useJailCard,
@@ -38,7 +39,21 @@ export function ActionPanel() {
 
   const pendingAction = gameState.pendingAction;
   const canRoll = isMyTurn && !myPlayer.hasRolled && !isRolling && !pendingAction;
-  const canEndTurn = isMyTurn && myPlayer.hasRolled && !pendingAction;
+
+  // Rolling doubles earns another roll for the same player (after resolving the
+  // tile they landed on). doublesCount > 0 excludes the "doubles to leave jail"
+  // case, which never grants an extra roll.
+  const lastRoll = gameState.currentDiceRoll;
+  const earnedExtraRoll =
+    isMyTurn &&
+    myPlayer.hasRolled &&
+    !pendingAction &&
+    !myPlayer.inJail &&
+    lastRoll !== null &&
+    lastRoll[0] === lastRoll[1] &&
+    gameState.doublesCount > 0;
+
+  const canEndTurn = isMyTurn && myPlayer.hasRolled && !pendingAction && !earnedExtraRoll;
 
   // Jail options
   const inJail = myPlayer.inJail && isMyTurn && !myPlayer.hasRolled;
@@ -260,6 +275,17 @@ export function ActionPanel() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Roll Again (earned by rolling doubles) */}
+          {earnedExtraRoll && (
+            <button
+              onClick={rollAgain}
+              disabled={isRolling}
+              className="btn btn-primary w-full text-lg"
+            >
+              Roll Again (Doubles)
+            </button>
           )}
 
           {/* End Turn */}

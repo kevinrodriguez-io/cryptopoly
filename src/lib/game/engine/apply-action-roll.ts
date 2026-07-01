@@ -4,9 +4,9 @@
 
 import type { GameState } from '../types';
 import { TILES } from '../board-data';
-import { GO_SALARY, JAIL_FINE, JAIL_INDEX, MAX_DOUBLES } from './constants';
+import { JAIL_FINE, JAIL_INDEX, MAX_DOUBLES } from './constants';
 import { getDiceTotal, isDoubles } from './dice';
-import { movePlayer } from './movement';
+import { applyGoSalary, movePlayer } from './movement';
 import { getCurrentPlayer } from './players';
 import { handleLandOnTile } from './tiles';
 
@@ -17,12 +17,11 @@ export function handleRollDice(
   const currentPlayer = getCurrentPlayer(newState);
   if (!currentPlayer || currentPlayer.id !== action.playerId) return;
 
-  if (
-    newState.currentDiceRoll &&
-    newState.currentDiceRoll[0] === action.result[0] &&
-    newState.currentDiceRoll[1] === action.result[1] &&
-    currentPlayer.hasRolled
-  ) {
+  // Idempotency: every physical roll carries a unique seed. If we've already
+  // applied this exact roll, skip it. This is robust even when a doubles roll
+  // resets state for an extra roll (where currentDiceRoll is cleared), so a
+  // late-arriving duplicate of a previous roll can never move the player twice.
+  if (action.seed && newState.lastDiceRollSeed === action.seed) {
     return;
   }
 
@@ -43,9 +42,6 @@ export function handleRollDice(
           hasRolled: true,
         },
       };
-      const { newPosition, passedGo } = movePlayer(currentPlayer, total, newState);
-      newState.players[currentPlayer.id].position = newPosition;
-      if (passedGo) newState.players[currentPlayer.id].money += GO_SALARY;
     } else {
       const newJailTurns = currentPlayer.jailTurns + 1;
       if (newJailTurns >= 3) {
@@ -59,9 +55,6 @@ export function handleRollDice(
             hasRolled: true,
           },
         };
-        const { newPosition, passedGo } = movePlayer(newState.players[currentPlayer.id], total, newState);
-        newState.players[currentPlayer.id].position = newPosition;
-        if (passedGo) newState.players[currentPlayer.id].money += GO_SALARY;
       } else {
         newState.players = {
           ...newState.players,
@@ -72,8 +65,20 @@ export function handleRollDice(
           },
         };
         newState.turnPhase = 'end-turn';
+        return;
       }
     }
+
+    // Player was released from jail this turn (rolled doubles or paid the fine
+    // after 3 turns): move them, credit GO if applicable, and resolve whatever
+    // tile they land on (draw-card, buy-decision, rent, tax, etc.).
+    const releasedPlayer = newState.players[currentPlayer.id];
+    const { newPosition, passedGo } = movePlayer(releasedPlayer, total, newState);
+    newState.players[currentPlayer.id] = { ...releasedPlayer, position: newPosition };
+    if (passedGo) applyGoSalary(newState, currentPlayer.id);
+
+    newState.turnPhase = 'action';
+    handleLandOnTile(newState, currentPlayer.id, TILES[newPosition]);
     return;
   }
 
@@ -101,10 +106,10 @@ export function handleRollDice(
     [currentPlayer.id]: {
       ...currentPlayer,
       position: newPosition,
-      money: passedGo ? currentPlayer.money + GO_SALARY : currentPlayer.money,
       hasRolled: true,
     },
   };
+  if (passedGo) applyGoSalary(newState, currentPlayer.id);
 
   newState.turnPhase = 'action';
   const landedTile = TILES[newPosition];

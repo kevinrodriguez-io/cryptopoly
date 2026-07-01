@@ -205,7 +205,8 @@ Cryptopoly follows classic Monopoly rules on a **40-tile** crypto-themed board. 
   - **Tax**: **Pay tax** (money goes to Free Parking).
   - **Go to Jail**: move to Jail, turn ends.
   - **Free Parking**: collect pool if any.
-- When the player has resolved the landing (and any card), they can optionally **build houses**, **sell houses**, **mortgage** or **unmortgage** (unmortgage = mortgage × 1.1). Then **End turn** → next player, `turnPhase` back to `pre-roll`.
+- When the player has resolved the landing (and any card), they can optionally **build houses**, **sell houses**, **mortgage** or **unmortgage** (unmortgage = mortgage × 1.1).
+- **Doubles**: If the roll was a double (and didn’t send the player to jail), after resolving the landing they **Roll Again** as the same player instead of ending the turn — `doublesCount` carries over so a 3rd consecutive double still sends them to Jail. A non-doubles roll ends with **End turn** → next player, `turnPhase` back to `pre-roll`. (Rolling doubles to *leave* jail does not grant an extra roll.)
 
 ### Rent and property rules
 

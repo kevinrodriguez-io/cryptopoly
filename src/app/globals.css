@@ -143,3 +143,16 @@ select {
 .token-bounce {
   animation: token-bounce 0.5s ease-in-out;
 }
+
+/* GO salary collected popup */
+@keyframes go-collect-pop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.85); }
+  12% { opacity: 1; transform: translateY(0) scale(1.06); }
+  22% { transform: translateY(0) scale(1); }
+  82% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-12px) scale(0.98); }
+}
+
+.go-collect-pop {
+  animation: go-collect-pop 2.6s ease-in-out forwards;
+}

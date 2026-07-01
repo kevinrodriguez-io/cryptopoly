@@ -261,6 +261,13 @@ export interface GameState {
   // Winner
   winnerId: string | null;
 
+  /**
+   * Set whenever a player collects the GO salary (passing or landing on GO).
+   * `id` increments on each collection so clients can trigger the
+   * "+$200" animation exactly once per event.
+   */
+  goCollectEvent?: { playerId: string; amount: number; id: number };
+
   // Timestamps
   createdAt: number;
   lastUpdateAt: number;
@@ -294,6 +301,7 @@ export type GameAction =
   | { type: 'REJECT_TRADE'; tradeId: string }
   | { type: 'CANCEL_TRADE'; tradeId: string }
   | { type: 'DECLARE_BANKRUPTCY'; playerId: string; creditorId: string | null }
+  | { type: 'ROLL_AGAIN'; playerId: string }
   | { type: 'END_TURN'; playerId: string };
 
 // Network message types
